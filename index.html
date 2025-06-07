@@ -14,16 +14,14 @@
     h1 {
       color: #333;
     }
-    input {
+    input, button {
       padding: 0.5rem;
       margin: 0.5rem 0;
       width: 100%;
       max-width: 300px;
+      box-sizing: border-box;
     }
     button {
-      padding: 0.5rem 1rem;
-      margin-top: 1rem;
-      margin-right: 0.5rem;
       background-color: #007bff;
       color: white;
       border: none;
@@ -57,7 +55,10 @@
   <input type="number" id="containerWeight" min="0" step="0.01" /><br />
 
   <button onclick="addEntry()">Add Entry</button>
-  <button onclick="exportToExcel()">Download Excel</button>
+  <button onclick="exportToExcel()">💾 Save to Excel</button><br />
+
+  <input type="file" id="fileInput" accept=".xlsx" />
+  <button onclick="importFromExcel()">📁 Import from Excel</button>
 
   <div id="entries"></div>
   <div class="summary" id="summary"></div>
@@ -65,7 +66,6 @@
   <script>
     const STORAGE_KEY = 'produce_entries_v1';
     const STORAGE_TIMESTAMP = 'produce_entries_timestamp';
-
     let entries = [];
 
     function loadStoredEntries() {
@@ -88,11 +88,8 @@
     }
 
     function addEntry() {
-      const produceInput = document.getElementById('produceWeight');
-      const containerInput = document.getElementById('containerWeight');
-
-      const produce = parseFloat(produceInput.value);
-      const container = parseFloat(containerInput.value);
+      const produce = parseFloat(document.getElementById('produceWeight').value);
+      const container = parseFloat(document.getElementById('containerWeight').value);
 
       if (isNaN(produce) || isNaN(container) || produce < 0 || container < 0) {
         alert("Please enter valid, non-negative numbers.");
@@ -102,36 +99,32 @@
       const net = produce - container;
       const date = new Date().toLocaleString();
 
-      const entry = { produce, container, net, date };
-      entries.push(entry);
-
+      entries.push({ produce, container, net, date });
       saveEntries();
       updateDisplay();
 
-      produceInput.value = '';
-      containerInput.value = '';
+      document.getElementById('produceWeight').value = '';
+      document.getElementById('containerWeight').value = '';
     }
 
     function updateDisplay() {
       const entriesDiv = document.getElementById('entries');
       const summaryDiv = document.getElementById('summary');
-
       entriesDiv.innerHTML = '';
+
       let totalNet = 0;
-
-      entries.forEach((entry, index) => {
+      entries.forEach((entry, i) => {
         totalNet += entry.net;
-
-        const entryDiv = document.createElement('div');
-        entryDiv.className = 'entry';
-        entryDiv.innerHTML = `
-          <strong>Entry ${index + 1}</strong><br />
-          📅 ${entry.date}<br />
-          🥬 Produce: ${entry.produce.toFixed(2)} kg<br />
-          🧺 Container: ${entry.container.toFixed(2)} kg<br />
-          ⚖️ Net: ${entry.net.toFixed(2)} kg
+        const div = document.createElement('div');
+        div.className = 'entry';
+        div.innerHTML = `
+          <strong>Entry ${i + 1}</strong><br />
+          Date: ${entry.date}<br />
+          Produce: ${entry.produce.toFixed(2)} kg<br />
+          Container: ${entry.container.toFixed(2)} kg<br />
+          Net: ${entry.net.toFixed(2)} kg
         `;
-        entriesDiv.appendChild(entryDiv);
+        entriesDiv.appendChild(div);
       });
 
       summaryDiv.innerText = `Total Net Weight: ${totalNet.toFixed(2)} kg`;
@@ -145,12 +138,47 @@
 
       const worksheet = XLSX.utils.json_to_sheet(entries);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "ProduceEntries");
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Entries");
 
-      XLSX.writeFile(workbook, "produce_entries.xlsx");
+      XLSX.writeFile(workbook, "produce_entries.xlsx");  // Always same name (simulates overwriting)
     }
 
-    // Initial Load
+    function importFromExcel() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert("Please select an Excel file.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const importedEntries = XLSX.utils.sheet_to_json(worksheet);
+
+        const isValid = importedEntries.every(e =>
+          'produce' in e && 'container' in e && 'net' in e && 'date' in e
+        );
+
+        if (!isValid) {
+          alert("Invalid file structure. Columns needed: produce, container, net, date.");
+          return;
+        }
+
+        entries = importedEntries;
+        saveEntries();
+        updateDisplay();
+        alert("✅ Entries imported successfully.");
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+
+    // Init
     loadStoredEntries();
     updateDisplay();
   </script>
