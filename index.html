@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Produce Weight Input System</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -22,13 +23,15 @@
     button {
       padding: 0.5rem 1rem;
       margin-top: 1rem;
-      background-color: #28a745;
+      margin-right: 0.5rem;
+      background-color: #007bff;
       color: white;
       border: none;
       cursor: pointer;
+      border-radius: 4px;
     }
     button:hover {
-      background-color: #218838;
+      background-color: #0056b3;
     }
     .entry {
       margin: 1rem 0;
@@ -54,13 +57,35 @@
   <input type="number" id="containerWeight" min="0" step="0.01" /><br />
 
   <button onclick="addEntry()">Add Entry</button>
+  <button onclick="exportToExcel()">Download Excel</button>
 
   <div id="entries"></div>
-
   <div class="summary" id="summary"></div>
 
   <script>
-    const entries = [];
+    const STORAGE_KEY = 'produce_entries_v1';
+    const STORAGE_TIMESTAMP = 'produce_entries_timestamp';
+
+    let entries = [];
+
+    function loadStoredEntries() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      const storedTime = localStorage.getItem(STORAGE_TIMESTAMP);
+      const now = new Date().getTime();
+
+      if (stored && storedTime && (now - parseInt(storedTime)) <= 7 * 24 * 60 * 60 * 1000) {
+        entries = JSON.parse(stored);
+      } else {
+        entries = [];
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_TIMESTAMP);
+      }
+    }
+
+    function saveEntries() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+      localStorage.setItem(STORAGE_TIMESTAMP, new Date().getTime().toString());
+    }
 
     function addEntry() {
       const produceInput = document.getElementById('produceWeight');
@@ -75,10 +100,14 @@
       }
 
       const net = produce - container;
-      const entry = { produce, container, net };
+      const date = new Date().toLocaleString();
+
+      const entry = { produce, container, net, date };
       entries.push(entry);
 
+      saveEntries();
       updateDisplay();
+
       produceInput.value = '';
       containerInput.value = '';
     }
@@ -96,16 +125,34 @@
         const entryDiv = document.createElement('div');
         entryDiv.className = 'entry';
         entryDiv.innerHTML = `
-          Entry ${index + 1}:<br />
-          Produce: ${entry.produce.toFixed(2)} kg |
-          Container: ${entry.container.toFixed(2)} kg |
-          Net: ${entry.net.toFixed(2)} kg
+          <strong>Entry ${index + 1}</strong><br />
+          📅 ${entry.date}<br />
+          🥬 Produce: ${entry.produce.toFixed(2)} kg<br />
+          🧺 Container: ${entry.container.toFixed(2)} kg<br />
+          ⚖️ Net: ${entry.net.toFixed(2)} kg
         `;
         entriesDiv.appendChild(entryDiv);
       });
 
       summaryDiv.innerText = `Total Net Weight: ${totalNet.toFixed(2)} kg`;
     }
+
+    function exportToExcel() {
+      if (entries.length === 0) {
+        alert("No entries to export.");
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(entries);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "ProduceEntries");
+
+      XLSX.writeFile(workbook, "produce_entries.xlsx");
+    }
+
+    // Initial Load
+    loadStoredEntries();
+    updateDisplay();
   </script>
 
 </body>
